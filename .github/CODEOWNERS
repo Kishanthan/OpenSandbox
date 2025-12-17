@@ -2,21 +2,21 @@
 # Rules are evaluated top-to-bottom; the last matching pattern wins.
 
 # Control plane (server)
-/server/ @Pangjiping @hellomypastor
+/server/ @Pangjiping @ninan-nn @jwx0925
 
 # Runtime agent (execd) and sandbox images
-/components/execd/ @Pangjiping
-/sandboxes/ @Pangjiping @hellomypastor
+/components/execd/ @Pangjiping @hittyt
+/sandboxes/ @Pangjiping @ninan-nn @jwx0925 @hittyt @hellomypastor
 
 # SDKs
-/sdks/sandbox/python/ @opensandbox/sdk-python
-/sdks/sandbox/kotlin/ @opensandbox/sdk-jvm
-/sdks/code-interpreter/python/ @opensandbox/sdk-python
-/sdks/code-interpreter/kotlin/ @opensandbox/sdk-jvm
+/sdks/sandbox/python/ @ninan-nn @jwx0925 @hittyt
+/sdks/sandbox/kotlin/ @ninan-nn @jwx0925 @hittyt
+/sdks/code-interpreter/python/ @ninan-nn @jwx0925
+/sdks/code-interpreter/kotlin/ @ninan-nn @jwx0925
 
 # Specs and docs
-/specs/ @opensandbox/product
-/docs/ @Pangjiping @hellomypastor
+/specs/ @jwx0925 @hittyt
+/docs/ @jwx0925 @hittyt @hellomypastor @Pangjiping @ninan-nn
 
 # Default owners (fallback)
-* @Pangjiping
+* @jwx0925 @hittyt @hellomypastor @Pangjiping @ninan-nn
