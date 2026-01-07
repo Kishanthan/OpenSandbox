@@ -1,0 +1,34 @@
+services:
+  # Sidecar with DNS interception
+  egress:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: opensandbox/egress:latest
+    cap_add:
+      - NET_ADMIN
+    environment:
+      # Allow google.com only; default deny
+      OPENSANDBOX_NETWORK_POLICY: |
+        {"egress":[{"action":"allow","target":"google.com"}],"default_action":"deny"}
+  # Main app shares network namespace with sidecar
+  app:
+    image: curlimages/curl:8.11.1
+    depends_on:
+      - egress
+    network_mode: "service:egress"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        set -e;
+        echo "=== allowed domain (google.com) ===";
+        curl -I --max-time 10 https://google.com;
+        echo "=== blocked domain (www.github.com) ===";
+        if curl -I --max-time 10 https://www.github.com; then
+          echo "ERROR: github.com unexpectedly reachable";
+          exit 1;
+        else
+          echo "blocked as expected";
+        fi;
+        echo "all checks passed";
+
