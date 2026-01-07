@@ -37,7 +37,7 @@ func main() {
 	if err := iptables.SetupRedirect(15353); err != nil {
 		log.Fatalf("failed to install iptables redirect: %v", err)
 	}
-	log.Println("iptables redirect configured (OUTPUT 53 -> 15353)")
+	log.Printf("iptables redirect configured (OUTPUT 53 -> 15353) with SO_MARK bypass for proxy upstream traffic")
 
 	<-ctx.Done()
 	log.Println("received shutdown signal; exiting")

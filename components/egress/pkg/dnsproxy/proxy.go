@@ -99,9 +99,21 @@ func (p *Proxy) serveDNS(w dns.ResponseWriter, r *dns.Msg) {
 }
 
 func (p *Proxy) forward(r *dns.Msg) (*dns.Msg, error) {
-	c := &dns.Client{Timeout: 5 * time.Second}
+	c := &dns.Client{
+		Timeout: 5 * time.Second,
+		Dialer:  p.dialerWithMark(),
+	}
 	resp, _, err := c.Exchange(r, p.upstream)
 	return resp, err
+}
+
+// UpstreamHost returns the host part of the upstream resolver, empty on parse error.
+func (p *Proxy) UpstreamHost() string {
+	host, _, err := net.SplitHostPort(p.upstream)
+	if err != nil {
+		return ""
+	}
+	return host
 }
 
 func discoverUpstream() (string, error) {
