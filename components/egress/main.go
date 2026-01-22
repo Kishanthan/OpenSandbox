@@ -31,8 +31,16 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	// Start in allow-all mode; policy will be set via HTTP API.
-	proxy, err := dnsproxy.New(nil, "")
+	// Optional bootstrap via env; still allow runtime HTTP updates.
+	initialPolicy, err := dnsproxy.LoadPolicyFromEnvVar(policy.EgressRulesEnv)
+	if err != nil {
+		log.Fatalf("failed to parse %s: %v", policy.EgressRulesEnv, err)
+	}
+	if initialPolicy != nil {
+		log.Printf("loaded initial egress policy from %s", policy.EgressRulesEnv)
+	}
+
+	proxy, err := dnsproxy.New(initialPolicy, "")
 	if err != nil {
 		log.Fatalf("failed to init dns proxy: %v", err)
 	}

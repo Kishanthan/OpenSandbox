@@ -40,6 +40,9 @@ The egress control is implemented as a **Sidecar** that shares the network names
   - Set `OPENSANDBOX_EGRESS_TOKEN` in the sidecar container.
   - Callers must send header `OPENSANDBOX-EGRESS-AUTH: <token>`.
   - If token is not set, the endpoint stays open (not recommended for shared environments).
+- Optional bootstrap at start via env:
+  - `OPENSANDBOX_EGRESS_RULES` (JSON, same shape as `/policy`) seeds initial policy.
+  - If unset/empty, sidecar starts allow-all until HTTP updates.
 
 ### Runtime HTTP API
 

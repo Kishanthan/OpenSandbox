@@ -20,4 +20,7 @@ const (
 
 	EgressAuthTokenEnv    = "OPENSANDBOX_EGRESS_TOKEN"
 	EgressAuthTokenHeader = "OPENSANDBOX-EGRESS-AUTH"
+
+	// Optional bootstrap policy at sidecar start; same shape as /policy.
+	EgressRulesEnv = "OPENSANDBOX_EGRESS_RULES"
 )

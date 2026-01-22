@@ -4,7 +4,7 @@ authors:
   - "@hittyt"
   - "@Pangjiping"
 creation-date: 2025-12-27
-last-updated: 2026-01-07
+last-updated: 2026-01-22
 status: implementing
 ---
 
@@ -289,12 +289,12 @@ sandbox = await Sandbox.create(
 │                                  ▼                                          │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
 │  │ DockerSandboxService / K8sSandboxService                             │   │
-│  │   1. Serialize network_policy to JSON                                │   │
-│  │   2. Pass to egress sidecar via:                                     │   │
-│  │      - Environment variable: OPENSANDBOX_NETWORK_POLICY              │   │
-│  │      - Or mounted config file: /etc/opensandbox/network-policy.json  │   │
-│  │   3. Add CAP_NET_ADMIN capability to sidecar container only          │   │
-│  │   4. Configure app container to share sidecar network namespace      │   │
+│  │   1. Start egress sidecar (CAP_NET_ADMIN) + app container (shared ns) │   │
+│  │   2. Inject OPENSANDBOX_EGRESS_TOKEN into sidecar                    │   │
+│  │   3. (Optional) Seed policy from env OPENSANDBOX_EGRESS_RULES        │   │
+│  │   4. Wait for sidecar /healthz = 200                                 │   │
+│  │   5. POST network_policy to /policy with header                      │   │
+│  │      "OPENSANDBOX-EGRESS-AUTH: <token>"                              │   │
 │  └───────────────────────────────┬──────────────────────────────────────┘   │
 └──────────────────────────────────┼──────────────────────────────────────────┘
                                    │
@@ -303,11 +303,12 @@ sandbox = await Sandbox.create(
 │                           Sandbox (shared netns)                             │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
 │  │ Egress Sidecar (NET_ADMIN)                                           │   │
-│  │   1. Parse network_policy from env/file                              │   │
-│  │   2. Start DNS Proxy on 127.0.0.1:15353 (non-privileged port)        │   │
-│  │   3. Setup iptables REDIRECT 53→15353 (CAP_NET_ADMIN)                │   │
-│  │   4. Probe nftables capability (fallback to dns-only)                │   │
-│  │   5. Initialize network filter if available                          │   │
+│  │   1. Load optional bootstrap from OPENSANDBOX_EGRESS_RULES (else allow-all)│   │
+│  │   2. Accept updates via HTTP /policy (with auth header)              │   │
+│  │   3. Start DNS Proxy on 127.0.0.1:15353 (non-privileged port)        │   │
+│  │   4. Setup iptables REDIRECT 53→15353 (CAP_NET_ADMIN)                │   │
+│  │   5. Probe nftables capability (fallback to dns-only)                │   │
+│  │   6. Initialize network filter if available                          │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -1039,15 +1040,18 @@ The sidecar holds the only elevated capability (`CAP_NET_ADMIN`) needed for ipta
 
 - Create an egress sidecar container with `--cap-add=NET_ADMIN` (no root required).
 - Run the application container with `--network container:<sidecar>` so they share one network namespace.
-- Pass `OPENSANDBOX_NETWORK_POLICY` (or mounted config) to the sidecar only.
-- Sidecar startup: start DNS proxy on `127.0.0.1:15353`, install iptables REDIRECT 53→15353, probe nftables, program allowlists.
+- Sidecar starts DNS proxy on `127.0.0.1:15353`, installs iptables REDIRECT 53→15353, probes nftables.
+- Server waits for sidecar `/healthz` 200, then POSTs the declared sandbox network policy to sidecar `/policy`
+  with header `OPENSANDBOX-EGRESS-AUTH: <token>` (token injected via env `OPENSANDBOX_EGRESS_TOKEN`).
+- No `OPENSANDBOX_NETWORK_POLICY` env/config injection path is used anymore.
 
 #### Deployment Flow (Kubernetes)
 
 - Pod spec includes two containers: `egress-sidecar` (with `capabilities.add: [NET_ADMIN]`) and the application container (no extra caps).
 - Both containers share the pod network namespace by default; sidecar listens on `127.0.0.1:15353`.
-- `OPENSANDBOX_NETWORK_POLICY` (or a mounted file) is injected into the sidecar only.
-- Sidecar init: DNS proxy start, iptables REDIRECT setup, nftables allowlists.
+- Server (inside cluster) waits for sidecar `/healthz` 200 on the Pod IP, then POSTs the sandbox `networkPolicy`
+  to `/policy` with `OPENSANDBOX-EGRESS-AUTH` header. Token comes from `OPENSANDBOX_EGRESS_TOKEN` env on the sidecar.
+- HostNetwork + network_policy is rejected.
 
 #### Behavior When CAP_NET_ADMIN Is Unavailable
 
@@ -1121,15 +1125,16 @@ The key insight is that `CAP_NET_ADMIN` grants permission to modify network conf
 **`server/src/services/docker.py`** (sidecar pattern):
 - Create an egress sidecar container when `network_policy` is present.
 - Add `CAP_NET_ADMIN` only to the sidecar.
-- Inject `OPENSANDBOX_NETWORK_POLICY` (or mounted file) into the sidecar.
+- Set `OPENSANDBOX_EGRESS_TOKEN` env (random per-sandbox) and optionally `OPENSANDBOX_EGRESS_HTTP_ADDR`.
 - Run the application container with `network_mode: "container:<sidecar>"` (shared netns), no extra caps.
+- Wait for sidecar `/healthz` 200, then POST `networkPolicy` to `/policy` with header `OPENSANDBOX-EGRESS-AUTH: <token>`.
 - Reject `--network host` when `network_policy` is set (hostNetwork not supported).
 
 **`server/src/services/k8s/batchsandbox_provider.py`** (Pod pattern):
 - Pod spec includes `egress-sidecar` with `capabilities.add: [NET_ADMIN]` and the application container without extra caps.
-- Policy injected via env or mounted file to the sidecar only.
-- Both containers share the pod network namespace by default.
-- Reject `hostNetwork=true` when `network_policy` is set (hostNetwork not supported).
+- Sidecar env includes `OPENSANDBOX_EGRESS_TOKEN` (and `OPENSANDBOX_EGRESS_HTTP_ADDR` if non-default); may optionally seed `OPENSANDBOX_EGRESS_RULES`.
+- Server (inside cluster) waits for `/healthz` on the Pod IP, then POSTs `networkPolicy` to `/policy` with header `OPENSANDBOX-EGRESS-AUTH`.
+- Reject `hostNetwork=true` when `network_policy` is set.
 
 #### 2. Sidecar Implementation
 
@@ -1143,32 +1148,18 @@ New packages:
 
 ```go
 func main() {
-    // ... existing initialization ...
+    ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+    defer cancel()
 
-    // Initialize egress control before starting user process
-    policyJSON := os.Getenv("OPENSANDBOX_NETWORK_POLICY")
-    if policyJSON != "" {
-        policy, err := egress.ParsePolicy(policyJSON)
-        if err != nil {
-            logs.Error("failed to parse network_policy: %v", err)
-            os.Exit(1)
-        }
+    initial, _ := dnsproxy.LoadPolicyFromEnvVar("OPENSANDBOX_EGRESS_RULES")
+    proxy, err := dnsproxy.New(initial, "") // start allow-all if nil
+    if err != nil { log.Fatal(err) }
+    go startPolicyServer(ctx, proxy, os.Getenv("OPENSANDBOX_EGRESS_HTTP_ADDR"), os.Getenv("OPENSANDBOX_EGRESS_TOKEN"))
 
-        ctrl, err := egress.NewController(policy)
-        if err != nil {
-            logs.Error("failed to initialize egress control: %v", err)
-            os.Exit(1)
-        }
+    if err := proxy.Start(ctx); err != nil { log.Fatal(err) }
+    if err := iptables.SetupRedirect(15353); err != nil { log.Fatal(err) }
 
-        // Start() handles DNS proxy + iptables setup internally
-        // Uses graceful degradation if CAP_NET_ADMIN unavailable
-        if err := ctrl.Start(); err != nil {
-            logs.Error("failed to start egress control: %v", err)
-            os.Exit(1)
-        }
-    }
-
-    // ... start HTTP server and user process ...
+    <-ctx.Done()
 }
 ```
 

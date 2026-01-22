@@ -161,9 +161,9 @@ func discoverUpstream() (string, error) {
 	return "8.8.8.8:53", nil
 }
 
-// LoadPolicyFromEnv reads OPENSANDBOX_NETWORK_POLICY and parses it.
-func LoadPolicyFromEnv() (*policy.NetworkPolicy, error) {
-	raw := os.Getenv("OPENSANDBOX_NETWORK_POLICY")
+// LoadPolicyFromEnvVar reads the given env var and parses a policy; empty returns nil.
+func LoadPolicyFromEnvVar(envName string) (*policy.NetworkPolicy, error) {
+	raw := os.Getenv(envName)
 	if raw == "" {
 		return nil, nil
 	}

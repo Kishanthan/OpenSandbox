@@ -48,3 +48,25 @@ func TestProxyUpdatePolicy(t *testing.T) {
 		t.Fatalf("expected allow-all after clearing policy")
 	}
 }
+
+func TestLoadPolicyFromEnvVar(t *testing.T) {
+	const envName = "TEST_EGRESS_POLICY"
+	t.Setenv(envName, `{"default_action":"deny","egress":[{"action":"allow","target":"example.com"}]}`)
+
+	pol, err := LoadPolicyFromEnvVar(envName)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pol == nil || pol.Evaluate("example.com.") != policy.ActionAllow {
+		t.Fatalf("expected parsed policy to allow example.com")
+	}
+
+	t.Setenv(envName, "")
+	pol, err = LoadPolicyFromEnvVar(envName)
+	if err != nil {
+		t.Fatalf("unexpected error on empty env: %v", err)
+	}
+	if pol != nil {
+		t.Fatalf("expected nil policy when env is empty")
+	}
+}
