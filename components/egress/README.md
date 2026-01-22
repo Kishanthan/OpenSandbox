@@ -35,21 +35,21 @@ The egress control is implemented as a **Sidecar** that shares the network names
 ## Configuration
 
 - Starts in allow-all mode by default.
-- Use the built-in HTTP API to push/update policy; empty body clears (allow-all).
+- Use the built-in HTTP API to push/update policy; empty/whitespace/`{}`/`null` clears (allow-all).
 - Optional token auth to restrict calls to the platform:
   - Set `OPENSANDBOX_EGRESS_TOKEN` in the sidecar container.
   - Callers must send header `OPENSANDBOX-EGRESS-AUTH: <token>`.
   - If token is not set, the endpoint stays open (not recommended for shared environments).
 - Optional bootstrap at start via env:
   - `OPENSANDBOX_EGRESS_RULES` (JSON, same shape as `/policy`) seeds initial policy.
-  - If unset/empty, sidecar starts allow-all until HTTP updates.
+  - If unset/empty/`{}`/`null`, sidecar starts allow-all until HTTP updates.
 
 ### Runtime HTTP API
 
 - Default listen address: `:18080` (override with `OPENSANDBOX_EGRESS_HTTP_ADDR`).
 - Endpoints:
   - `GET /policy` — returns the current policy (`null` when allow-all).
-  - `POST /policy` — replaces the policy. Empty body clears restrictions (allow-all).
+  - `POST /policy` — replaces the policy. Empty/whitespace/`{}`/`null` clears restrictions (allow-all).
 
 Examples:
 

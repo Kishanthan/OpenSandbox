@@ -39,11 +39,19 @@ type EgressRule struct {
 // ParsePolicy parses JSON from env/config into a NetworkPolicy.
 // Default action falls back to "deny" to align with proposal.
 func ParsePolicy(raw string) (*NetworkPolicy, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || trimmed == "null" || trimmed == "{}" {
+		return nil, nil // treat empty/null payload as allow-all
+	}
+
 	var p NetworkPolicy
-	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+	if err := json.Unmarshal([]byte(trimmed), &p); err != nil {
 		return nil, err
 	}
 	if p.DefaultAction == "" {
+		if len(p.Egress) == 0 {
+			return nil, nil // empty object -> allow-all
+		}
 		p.DefaultAction = ActionDeny
 	}
 	return &p, nil
