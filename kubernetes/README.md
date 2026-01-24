@@ -96,7 +96,7 @@ This project requires two separate images - one for the controller and another f
    make docker-build docker-push IMG=<some-registry>/opensandbox-controller:tag
    
    # Build and push the task-executor image
-   make docker-build-task-executor docker-push-task-executor IMG=<some-registry>/opensandbox-task-executor:tag
+   make docker-build-task-executor docker-push-task-executor TASK_EXECUTOR_IMG=<some-registry>/opensandbox-task-executor:tag
    ```
 
    **NOTE:** These images ought to be published in the personal registry you specified. And it is required to have access to pull the images from the working environment. Make sure you have the proper permission to the registry if the above commands don't work.
