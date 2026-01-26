@@ -47,7 +47,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	sandboxv1alpha1 "github.com/alibaba/OpenSandbox/sandbox-k8s/api/v1alpha1"
+	sandboxv1alpha1 "github.com/alibaba/OpenSandbox/sandbox-k8s/apis/sandbox/v1alpha1"
 	"github.com/alibaba/OpenSandbox/sandbox-k8s/internal/controller/strategy"
 	taskscheduler "github.com/alibaba/OpenSandbox/sandbox-k8s/internal/scheduler"
 	mock_scheduler "github.com/alibaba/OpenSandbox/sandbox-k8s/internal/scheduler/mock"

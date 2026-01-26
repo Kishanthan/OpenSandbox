@@ -36,7 +36,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	sandboxv1alpha1 "github.com/alibaba/OpenSandbox/sandbox-k8s/api/v1alpha1"
+	sandboxv1alpha1 "github.com/alibaba/OpenSandbox/sandbox-k8s/apis/sandbox/v1alpha1"
 	"github.com/alibaba/OpenSandbox/sandbox-k8s/internal/controller"
 	"github.com/alibaba/OpenSandbox/sandbox-k8s/internal/utils/fieldindex"
 	// +kubebuilder:scaffold:imports

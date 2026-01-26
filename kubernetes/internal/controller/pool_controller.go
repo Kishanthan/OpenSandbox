@@ -42,7 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	sandboxv1alpha1 "github.com/alibaba/OpenSandbox/sandbox-k8s/api/v1alpha1"
+	sandboxv1alpha1 "github.com/alibaba/OpenSandbox/sandbox-k8s/apis/sandbox/v1alpha1"
 	"github.com/alibaba/OpenSandbox/sandbox-k8s/internal/utils"
 	controllerutils "github.com/alibaba/OpenSandbox/sandbox-k8s/internal/utils/controller"
 	"github.com/alibaba/OpenSandbox/sandbox-k8s/internal/utils/expectations"
