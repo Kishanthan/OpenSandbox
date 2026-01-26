@@ -96,7 +96,7 @@ kind delete cluster
    make docker-build docker-push IMG=<some-registry>/opensandbox-controller:tag
    
    # 构建和推送任务执行器镜像
-   make docker-build-task-executor docker-push-task-executor IMG=<some-registry>/opensandbox-task-executor:tag
+   make docker-build-task-executor docker-push-task-executor TASK_EXECUTOR_IMG=<some-registry>/opensandbox-task-executor:tag
    ```
 
    **注意：** 这些镜像应该发布在您指定的个人注册表中。需要能够从工作环境中拉取镜像。如果上述命令不起作用，请确保您对注册表具有适当的权限。
