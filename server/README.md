@@ -320,6 +320,14 @@ curl -X DELETE \
 |-----|------|---------|-------------|
 | `docker.network_mode` | string | `"host"` | Network mode (`"host"` or `"bridge"`) |
 
+### Agent-sandbox configuration
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `agent_sandbox.template_file` | string | `null` | Sandbox CR YAML template for agent-sandbox (used when `kubernetes.workload_provider = "agent-sandbox"`) |
+| `agent_sandbox.shutdown_policy` | string | `"Delete"` | Shutdown policy on expiry (`"Delete"` or `"Retain"`) |
+| `agent_sandbox.ingress_enabled` | boolean | `true` | Whether ingress routing is expected to be enabled |
+
 ### Environment variables
 
 | Variable | Description |

@@ -322,6 +322,14 @@ curl -X DELETE http://localhost:8080/v1/sandboxes/<sandbox-id>
 |----|------|--------|------|
 | `docker.network_mode` | string | `"host"` | 网络模式（`"host"` 或 `"bridge"`）|
 
+### Agent-sandbox 配置
+
+| 键 | 类型 | 默认值 | 描述 |
+|----|------|--------|------|
+| `agent_sandbox.template_file` | string | `null` | agent-sandbox 的 Sandbox CR YAML 模板路径（仅在 `kubernetes.workload_provider = "agent-sandbox"` 时使用） |
+| `agent_sandbox.shutdown_policy` | string | `"Delete"` | 过期时的关停策略（`"Delete"` 或 `"Retain"`） |
+| `agent_sandbox.ingress_enabled` | boolean | `true` | 是否启用 ingress 路由 |
+
 ### 环境变量
 
 | 变量 | 描述 |
