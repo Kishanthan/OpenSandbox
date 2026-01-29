@@ -30,6 +30,15 @@ status: draft
 
 Introduce a runtime-neutral Volume + VolumeBinding model in the Lifecycle API to enable persistent storage mounts across Docker and Kubernetes sandboxes. The proposal adds explicit volume definitions, binding semantics, and security constraints so that artifacts can persist beyond sandbox lifecycles without relying on file transfers.
 
+```text
+Time --------------------------------------------------------------->
+
+Volume lifecycle:  [provisioned]-------------------------[retained]--->
+Sandbox lifecycle:           [create]---[running]---[stop/delete]
+                              |                         |
+                          bind volume              unbind volume
+```
+
 ## Motivation
 
 OpenSandbox users running long-lived agents need artifacts (web pages, images, reports) to persist after a sandbox is terminated or restarted. Today, the API only supports transient filesystem operations via upload/download and provides no mount semantics; as a result, users must move large outputs out-of-band. This proposal adds first-class storage semantics while maintaining runtime portability and security boundaries.
