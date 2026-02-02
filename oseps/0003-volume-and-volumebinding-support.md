@@ -4,7 +4,7 @@ authors:
   - "yutian.taoyt"
 creation-date: 2026-01-29
 last-updated: 2026-02-02
-status: draft
+status: implementable
 ---
 
 # OSEP-0003: Volume Support
