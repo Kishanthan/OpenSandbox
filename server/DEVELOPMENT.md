@@ -250,6 +250,14 @@ uv run python -m src.main
 - HTTP proxy required
 - Endpoint format: `http://{server}/route/{sandbox_id}/{port}/path`
 
+### Egress sidecar (bridge + `networkPolicy`)
+
+- Config: set `[runtime].egress_image`; sidecar starts only when the request carries `networkPolicy`. Requires Docker `network_mode="bridge"`.
+- Network & privileges: main container shares the sidecar netns (`network_mode=container:<sidecar>`); main container explicitly drops `NET_ADMIN`; sidecar keeps `NET_ADMIN` to manage iptables / DNS transparent redirect.
+- Ports: host port bindings live on the sidecar; main container labels record the mapped ports for upstream endpoint resolution.
+- Lifecycle: on create failure / delete / expiration / abnormal recovery, the sidecar is cleaned up; startup also removes orphaned sidecars.
+- Injection: `OPENSANDBOX_EGRESS_RULES` env passes the `networkPolicy` JSON; sidecar image is pulled/ensured before start.
+
 ## Working with Kubernetes Runtime
 
 > **Status:** Planned / Configuration Ready

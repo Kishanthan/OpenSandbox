@@ -117,6 +117,38 @@ seccomp_profile = ""        # 配置文件路径或名称；为空使用 Docker 
 ```
 更多 Docker 安全参考：https://docs.docker.com/engine/security/
 
+### （可选）Egress sidecar 配置与使用
+
+- 配置镜像（仅在请求携带 `networkPolicy` 时注入）：
+```toml
+[runtime]
+type = "docker"
+execd_image = "sandbox-registry.cn-zhangjiakou.cr.aliyuncs.com/opensandbox/execd:v1.0.3"
+egress_image = "sandbox-registry.cn-zhangjiakou.cr.aliyuncs.com/opensandbox/egress:latest"
+```
+
+- 仅支持 Docker bridge 模式（`network_mode=host` 时会拒绝携带 `networkPolicy` 的请求）。
+- 主容器共享 sidecar 网络命名空间，主容器会显式 drop `NET_ADMIN`，sidecar 保留 `NET_ADMIN` 完成 iptables。
+- 注入 sidecar 时会在共享 netns 内默认禁用 IPv6，以保持策略生效一致性。
+- 侧车镜像会在启动前自动拉取；删除/过期/失败时会尝试同步清理 sidecar。
+- 请求体示例（`CreateSandboxRequest` 中携带 `networkPolicy`）：
+```json
+{
+  "image": {"uri": "python:3.11-slim"},
+  "entrypoint": ["python", "-m", "http.server", "8000"],
+  "timeout": 3600,
+  "resourceLimits": {"cpu": "500m", "memory": "512Mi"},
+  "networkPolicy": {
+    "defaultAction": "deny",
+    "egress": [
+      {"action": "allow", "target": "pypi.org"},
+      {"action": "allow", "target": "*.python.org"}
+    ]
+  }
+}
+```
+- `networkPolicy` 为空/缺省时不注入 sidecar，默认 allow-all。
+
 ### 启动服务
 
 使用 `uv` 启动服务：
@@ -311,10 +343,11 @@ curl -X DELETE http://localhost:8080/v1/sandboxes/<sandbox-id>
 
 ### 运行时配置
 
-| 键 | 类型 | 必需 | 描述 |
-|----|------|------|------|
-| `runtime.type` | string | 是 | 运行时实现（`"docker"` 或 `"kubernetes"`）|
-| `runtime.execd_image` | string | 是 | 包含 execd 二进制文件的容器镜像 |
+| 键                      | 类型     | 必需 | 描述                                 |
+|------------------------|--------|----|------------------------------------|
+| `runtime.type`         | string | 是  | 运行时实现（`"docker"` 或 `"kubernetes"`） |
+| `runtime.execd_image`  | string | 是  | 包含 execd 二进制文件的容器镜像                |
+| `runtime.egress_image` | string | 否  | 包含 egress 二进制文件的容器镜像               |
 
 ### Docker 配置
 
