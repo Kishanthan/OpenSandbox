@@ -81,8 +81,13 @@ jobs:
             TAG_PATH="${{ github.ref }}"
             TAG_PATH="${TAG_PATH#refs/tags/}"
 
-            COMPONENT=$(echo "$TAG_PATH" | cut -d'/' -f2)
-            IMAGE_TAG=$(echo "$TAG_PATH" | cut -d'/' -f3)
+            IMAGE_TAG="${TAG_PATH#server/}"
+
+            if [ -z "$IMAGE_TAG" ]; then
+              echo "failed to parse image tag from $TAG_PATH" >&2
+              exit 1
+            fi
+
             echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
           else
             echo "cannot parse tag"
@@ -91,7 +96,8 @@ jobs:
 
       - name: Build and push to registries
         working-directory: server
+        env:
+          TAG: ${{ steps.parse_tag.outputs.image_tag }}
         run: |
-          export TAG=$IMAGE_TAG
           chmod +x build.sh
           ./build.sh

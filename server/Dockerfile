@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM python:3.11-slim AS builder
+FROM python:3.10-slim AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -39,7 +39,7 @@ COPY LICENSE README.md README_zh.md example.config.toml example.config.zh.toml \
 # Install the project itself into the venv (deps already synced)
 RUN uv pip install --no-deps --editable .
 
-FROM python:3.11-slim AS runtime
+FROM python:3.10-slim AS runtime
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
