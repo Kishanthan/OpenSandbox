@@ -115,49 +115,117 @@ async def run_with_retry(
     language=None,
     handlers=None,
     max_retries: int = 3,
-    retry_delay: float = 1.0,
+    retry_delay: float = 2.0,
 ):
     """
-    Run code with retry logic for flaky kernel initialization.
+    Run code with retry logic for flaky kernel initialization and network errors.
 
-    Returns the execution result, retrying on empty/None id responses.
+    Returns the execution result, retrying on:
+    - Empty/None id responses (kernel not ready)
+    - Network errors (connection reset, server disconnected)
     """
     last_result = None
+    last_exception = None
+
     for attempt in range(max_retries):
-        result = await code_interpreter.codes.run(
-            code,
-            context=context,
-            language=language,
-            handlers=handlers,
-        )
-        last_result = result
-        if result is not None and result.id is not None:
-            return result
-        if attempt < max_retries - 1:
-            logger.warning(
-                "Execution returned empty result (attempt %d/%d), retrying in %.1fs...",
-                attempt + 1, max_retries, retry_delay
+        try:
+            result = await code_interpreter.codes.run(
+                code,
+                context=context,
+                language=language,
+                handlers=handlers,
             )
-            await asyncio.sleep(retry_delay)
-            retry_delay *= 1.5  # exponential backoff
-    return last_result
+            last_result = result
+            if result is not None and result.id is not None:
+                return result
+            # Empty result - retry
+            if attempt < max_retries - 1:
+                logger.warning(
+                    "Execution returned empty result (attempt %d/%d), retrying in %.1fs...",
+                    attempt + 1, max_retries, retry_delay
+                )
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 1.5  # exponential backoff
+        except Exception as e:
+            last_exception = e
+            error_name = type(e).__name__
+            # Check if it's a retryable network error
+            error_str = str(e).lower()
+            is_retryable = any(keyword in error_str for keyword in [
+                "disconnected", "connection", "reset", "closed", "timeout",
+                "remoteerror", "protocol", "peer closed"
+            ])
+            if is_retryable and attempt < max_retries - 1:
+                logger.warning(
+                    "Execution failed with %s (attempt %d/%d), retrying in %.1fs: %s",
+                    error_name, attempt + 1, max_retries, retry_delay, str(e)[:100]
+                )
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 1.5
+            else:
+                # Non-retryable error or last attempt
+                raise
+
+    # If we have a result (even empty), return it; otherwise raise last exception
+    if last_result is not None:
+        return last_result
+    if last_exception is not None:
+        raise last_exception
+    return None
+
+
+async def create_context_with_retry(
+    code_interpreter: CodeInterpreter,
+    language: str,
+    max_retries: int = 3,
+    retry_delay: float = 2.0,
+):
+    """Create a code context with retry logic for network errors."""
+    last_exception = None
+    for attempt in range(max_retries):
+        try:
+            ctx = await code_interpreter.codes.create_context(language)
+            # Small delay to allow kernel initialization
+            await asyncio.sleep(0.5)
+            return ctx
+        except Exception as e:
+            last_exception = e
+            error_str = str(e).lower()
+            is_retryable = any(keyword in error_str for keyword in [
+                "disconnected", "connection", "reset", "closed", "timeout",
+                "remoteerror", "protocol", "peer closed"
+            ])
+            if is_retryable and attempt < max_retries - 1:
+                logger.warning(
+                    "Context creation failed (attempt %d/%d), retrying in %.1fs: %s",
+                    attempt + 1, max_retries, retry_delay, str(e)[:100]
+                )
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 1.5
+            else:
+                raise
+    raise last_exception  # type: ignore
 
 
 @asynccontextmanager
 async def managed_ctx(code_interpreter: CodeInterpreter, language: str):
-    ctx = await code_interpreter.codes.create_context(language)
+    ctx = await create_context_with_retry(code_interpreter, language)
     try:
-        # Small delay to allow kernel initialization
-        await asyncio.sleep(0.2)
         yield ctx
     finally:
-        try:
-            if ctx.id:
-                await code_interpreter.codes.delete_context(ctx.id)
-        except Exception:
-            logger.warning(
-                "Cleanup: failed to delete context %s (%s)", ctx.id, language, exc_info=True
-            )
+        # Best-effort cleanup with retry
+        for cleanup_attempt in range(2):
+            try:
+                if ctx.id:
+                    await code_interpreter.codes.delete_context(ctx.id)
+                break
+            except Exception:
+                if cleanup_attempt == 0:
+                    await asyncio.sleep(0.5)
+                else:
+                    logger.warning(
+                        "Cleanup: failed to delete context %s (%s)", ctx.id, language, exc_info=True
+                    )
 
 
 @asynccontextmanager
