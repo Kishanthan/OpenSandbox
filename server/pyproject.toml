@@ -17,7 +17,7 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "sandbox-server"
+name = "opensandbox-server"
 dynamic = ["version"]
 description = "FastAPI control plane for OpenSandbox that manages sandbox lifecycle on Docker (ready) and Kubernetes (planned) runtimes."
 readme = "README.md"
