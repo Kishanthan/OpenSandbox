@@ -78,6 +78,13 @@ class ConnectionConfig(BaseModel):
             "with custom settings) to control connection pooling, proxies, retries, etc."
         ),
     )
+    use_server_proxy: bool = Field(
+        default=False,
+        description=(
+            "Using sandbox server as proxy for process execd requests"
+            "It's useful when client sdk can't access the created sandbox directly"
+        ),
+    )
 
     # Environment variable names
     _ENV_API_KEY = "OPEN_SANDBOX_API_KEY"
@@ -157,3 +164,9 @@ class ConnectionConfig(BaseModel):
         ):
             return f"{domain}/{self._API_VERSION}"
         return f"{self.protocol}://{domain}/{self._API_VERSION}"
+
+    def get_execd_url(self, endpoint: str) -> str:
+        """Get the actual URL for execd requests."""
+        if self.use_server_proxy:
+            return f"{self.get_domain()}/proxy/{endpoint}"
+        return endpoint

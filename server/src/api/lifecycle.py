@@ -21,8 +21,10 @@ All business logic is delegated to the service layer that backs each operation.
 
 from typing import List, Optional
 
-from fastapi import APIRouter,Header, Query, status
-from fastapi.responses import Response
+import httpx
+from fastapi import APIRouter, Header, Query, Request, status
+from fastapi.exceptions import HTTPException
+from fastapi.responses import Response, StreamingResponse
 
 from src.api.schema import (
     CreateSandboxRequest,
@@ -383,3 +385,58 @@ async def get_sandbox_endpoint(
     """
     # Delegate to the service layer for endpoint resolution
     return sandbox_service.get_endpoint(sandbox_id, port)
+
+
+client = httpx.AsyncClient(timeout=180.0)
+
+
+@router.api_route(
+    "/proxy/{endpoint}/{full_path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+)
+async def proxy_request(request: Request, endpoint: str, full_path: str):
+    """
+    Receives all incoming requests, determines the target sandbox from path parameter,
+    and asynchronously proxies the request to it.
+    """
+
+    target_host = f"{endpoint}"
+    target_url = f"http://{target_host}/{full_path}"
+
+    try:
+        headers = {
+            key: value
+            for (key, value) in request.headers.items()
+            if key.lower() != "host"
+        }
+
+        req = client.build_request(
+            method=request.method,
+            url=target_url,
+            headers=headers,
+            content=await request.body(),
+        )
+
+        # TODO: support websocket protocol?
+        # since execd component does not have websocket handler currently, we just raise an error here
+        if request.method == "GET" and request.headers.get("Upgrade") == "websocket":
+            raise HTTPException(
+                status_code=400, detail="Websocket upgrade is not supported yet"
+            )
+
+        resp = await client.send(req, stream=True)
+
+        return StreamingResponse(
+            content=resp.aiter_bytes(),
+            status_code=resp.status_code,
+            headers=resp.headers,
+        )
+    except httpx.ConnectError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not connect to the backend sandbox {endpoint}: {e}",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"An internal error occurred in the proxy: {e}"
+        )
