@@ -237,6 +237,23 @@ export class Sandbox {
       throw err;
     }
 
+    // Validate volumes: exactly one backend must be specified per volume
+    if (opts.volumes) {
+      for (const vol of opts.volumes) {
+        const backendsSpecified = [vol.host, vol.pvc].filter((b) => b !== undefined).length;
+        if (backendsSpecified === 0) {
+          throw new Error(
+            `Volume '${vol.name}' must specify exactly one backend (host, pvc), but none was provided.`
+          );
+        }
+        if (backendsSpecified > 1) {
+          throw new Error(
+            `Volume '${vol.name}' must specify exactly one backend (host, pvc), but multiple were provided.`
+          );
+        }
+      }
+    }
+
     const req: CreateSandboxRequest = {
       image: toImageSpec(opts.image),
       entrypoint: opts.entrypoint ?? DEFAULT_ENTRYPOINT,
