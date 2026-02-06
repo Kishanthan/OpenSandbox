@@ -70,7 +70,7 @@ from src.services.helpers import (
     parse_timestamp,
 )
 from src.services.sandbox_service import SandboxService
-from src.services.validators import ensure_entrypoint, ensure_future_expiration, ensure_metadata_labels
+from src.services.validators import ensure_entrypoint, ensure_future_expiration, ensure_metadata_labels, ensure_volumes_valid
 
 logger = logging.getLogger(__name__)
 
@@ -628,6 +628,7 @@ class DockerSandboxService(SandboxService):
         ensure_entrypoint(request.entrypoint)
         ensure_metadata_labels(request.metadata)
         self._ensure_network_policy_support(request)
+        self._validate_volumes(request)
         sandbox_id, created_at, expires_at = self._prepare_creation_context(request)
         return self._provision_sandbox(sandbox_id, request, created_at, expires_at)
 
@@ -790,6 +791,9 @@ class DockerSandboxService(SandboxService):
         image_uri, auth_config = self._resolve_image_auth(request, sandbox_id)
         mem_limit, nano_cpus = self._resolve_resource_limits(request)
 
+        # Build volume bind mounts from request volumes
+        volume_binds = self._build_volume_binds(request.volumes)
+
         sidecar_container = None
         host_config_kwargs: Dict[str, Any]
         exposed_ports: Optional[list[str]] = None
@@ -824,6 +828,10 @@ class DockerSandboxService(SandboxService):
                 exposed_ports = list(port_bindings.keys())
                 labels[SANDBOX_EMBEDDING_PROXY_PORT_LABEL] = str(host_execd_port)
                 labels[SANDBOX_HTTP_PORT_LABEL] = str(host_http_port)
+
+        # Inject volume bind mounts into Docker host config
+        if volume_binds:
+            host_config_kwargs["binds"] = volume_binds
 
         try:
             self._create_and_start_container(
@@ -884,6 +892,97 @@ class DockerSandboxService(SandboxService):
                     "message": "egress.image must be configured when networkPolicy is provided.",
                 },
             )
+
+    def _validate_volumes(self, request: CreateSandboxRequest) -> None:
+        """
+        Validate volume definitions for Docker runtime.
+
+        Performs comprehensive validation:
+        - Calls shared volume validation (name, mount path, sub path, backend count)
+        - Rejects unsupported backends for Docker (e.g., PVC)
+        - Validates host paths against allowlist
+        - Verifies that resolved host paths exist on the filesystem
+
+        Args:
+            request: Sandbox creation request.
+
+        Raises:
+            HTTPException: When any validation fails.
+        """
+        if not request.volumes:
+            return
+
+        # Shared validation: names, mount paths, sub paths, backend count, host path allowlist
+        allowed_prefixes = self.app_config.storage.allowed_host_paths or None
+        ensure_volumes_valid(request.volumes, allowed_host_prefixes=allowed_prefixes)
+
+        for volume in request.volumes:
+            # Docker does not support PVC backend
+            if volume.pvc is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "code": SandboxErrorCodes.UNSUPPORTED_VOLUME_BACKEND,
+                        "message": (
+                            f"Volume '{volume.name}' uses 'pvc' backend which is not supported "
+                            "in Docker runtime. PVC is only available in Kubernetes runtime."
+                        ),
+                    },
+                )
+
+            # Validate host path existence on the filesystem
+            if volume.host is not None:
+                resolved_path = volume.host.path
+                if volume.sub_path:
+                    resolved_path = os.path.join(resolved_path, volume.sub_path)
+
+                if not os.path.exists(resolved_path):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail={
+                            "code": SandboxErrorCodes.HOST_PATH_NOT_FOUND,
+                            "message": (
+                                f"Volume '{volume.name}': resolved host path '{resolved_path}' "
+                                "does not exist. Host paths must exist before sandbox creation."
+                            ),
+                        },
+                    )
+
+    @staticmethod
+    def _build_volume_binds(volumes: Optional[list]) -> list[str]:
+        """
+        Convert Volume definitions with host backend into Docker bind mount specs.
+
+        Each bind mount is formatted as:
+            host_path:container_path:ro  (for read-only)
+            host_path:container_path:rw  (for read-write, default)
+
+        The host path is resolved by combining host.path with the optional subPath.
+
+        Args:
+            volumes: List of Volume objects from the creation request.
+
+        Returns:
+            List of Docker bind mount strings.
+        """
+        if not volumes:
+            return []
+
+        binds: list[str] = []
+        for volume in volumes:
+            if volume.host is None:
+                continue
+
+            # Resolve the concrete host path (host.path + optional subPath)
+            host_path = volume.host.path
+            if volume.sub_path:
+                host_path = os.path.join(host_path, volume.sub_path)
+
+            container_path = volume.mount_path
+            mode = "ro" if volume.read_only else "rw"
+            binds.append(f"{host_path}:{container_path}:{mode}")
+
+        return binds
 
     def list_sandboxes(self, request: ListSandboxesRequest) -> ListSandboxesResponse:
         """

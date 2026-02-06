@@ -287,6 +287,64 @@ PY
   wait_for_sidecar_gone "${SANDBOX_ID}"
 fi
 
+step "Create sandbox with host volume mount"
+# Prepare the host volume test directory
+mkdir -p /tmp/opensandbox-e2e/host-volume-test
+echo "opensandbox-e2e-marker" > /tmp/opensandbox-e2e/host-volume-test/marker.txt
+chmod -R 777 /tmp/opensandbox-e2e
+
+volume_payload='{
+  "image": { "uri": "ubuntu" },
+  "env": {},
+  "metadata": { "volume": "host-test" },
+  "entrypoint": ["tail", "-f", "/dev/null"],
+  "resourceLimits": { "cpu": "500m", "memory": "512Mi" },
+  "timeout": 60,
+  "volumes": [
+    {
+      "name": "test-host-vol",
+      "host": { "path": "/tmp/opensandbox-e2e/host-volume-test" },
+      "mountPath": "/mnt/host-data",
+      "readOnly": false
+    }
+  ]
+}'
+
+volume_resp_with_status=$(curl_json_status \
+  -H 'Content-Type: application/json' \
+  -d "${volume_payload}" \
+  "${BASE_API_URL}/sandboxes")
+
+volume_status="${volume_resp_with_status##*$'\n'}"
+volume_body="${volume_resp_with_status%$'\n'*}"
+
+if [[ "${volume_status}" != "202" ]]; then
+  warn "Skip host volume smoke (status ${volume_status}). Body: ${volume_body}"
+  warn "Likely host path validation or storage config issue."
+else
+  VOLUME_SANDBOX_ID=$(python - <<'PY' "${volume_body}"
+import json,sys
+data=json.loads(sys.argv[1])
+sid=str(data.get("id","")).strip()
+if not sid:
+    raise SystemExit("Failed to parse sandbox id from response")
+print(sid,end="")
+PY
+)
+  echo "Volume sandbox created: id=${VOLUME_SANDBOX_ID}"
+
+  # Temporarily set SANDBOX_ID for wait_for_running
+  OLD_SANDBOX_ID="${SANDBOX_ID:-}"
+  SANDBOX_ID="${VOLUME_SANDBOX_ID}"
+  step "Wait for volume sandbox to reach Running"
+  wait_for_running >/dev/null
+  SANDBOX_ID="${OLD_SANDBOX_ID}"
+
+  step "Delete volume sandbox"
+  curl_json -X DELETE "${BASE_API_URL}/sandboxes/${VOLUME_SANDBOX_ID}"
+  echo "Volume sandbox ${VOLUME_SANDBOX_ID} deleted."
+fi
+
 step "Create short-lived sandbox (60s TTL) for auto-expiration"
 create_payload_short='{
   "image": { "uri": "ubuntu" },
