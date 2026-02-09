@@ -1,0 +1,92 @@
+# Pool named "pool-sample" to match the examples/code-interpreter/main_use_pool.py example
+# This uses the same configuration as pool-full.yaml but with the name expected by the example
+apiVersion: sandbox.opensandbox.io/v1alpha1
+kind: Pool
+metadata:
+  name: pool-sample
+  namespace: opensandbox
+  labels:
+    app.kubernetes.io/name: opensandbox
+    app.kubernetes.io/component: pool
+spec:
+  template:
+    metadata:
+      labels:
+        app: code-interpreter
+        pool: pool-sample
+    spec:
+      volumes:
+        - name: sandbox-storage
+          emptyDir: {}
+        - name: opensandbox-bin
+          emptyDir: {}
+
+      # Init containers install execd and task-executor binaries
+      initContainers:
+        - name: task-executor-installer
+          image: localhost:32000/opensandbox-task-executor:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              cp /workspace/server /opt/opensandbox/bin/task-executor &&
+              chmod +x /opt/opensandbox/bin/task-executor
+          volumeMounts:
+            - name: opensandbox-bin
+              mountPath: /opt/opensandbox/bin
+
+        - name: execd-installer
+          image: localhost:32000/opensandbox-execd:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              cp ./execd /opt/opensandbox/bin/execd &&
+              cp ./bootstrap.sh /opt/opensandbox/bin/bootstrap.sh &&
+              chmod +x /opt/opensandbox/bin/execd &&
+              chmod +x /opt/opensandbox/bin/bootstrap.sh
+          volumeMounts:
+            - name: opensandbox-bin
+              mountPath: /opt/opensandbox/bin
+
+      containers:
+        - name: sandbox
+          # Use code-interpreter for full functionality
+          # Or use python:3.11-slim for testing without building the large image
+          image: localhost:32000/code-interpreter:latest
+          command:
+            - "/bin/sh"
+            - "-c"
+            - |
+              /opt/opensandbox/bin/task-executor -listen-addr=0.0.0.0:5758 >/tmp/task-executor.log 2>&1
+          ports:
+            - containerPort: 5758
+              name: task-executor
+            - containerPort: 44772
+              name: execd
+          env:
+            - name: SANDBOX_MAIN_CONTAINER
+              value: main
+            - name: EXECD_ENVS
+              value: /opt/opensandbox/.env
+            - name: EXECD
+              value: /opt/opensandbox/bin/execd
+          volumeMounts:
+            - name: sandbox-storage
+              mountPath: /var/lib/sandbox
+            - name: opensandbox-bin
+              mountPath: /opt/opensandbox/bin
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+
+      tolerations:
+        - operator: "Exists"
+
+  capacitySpec:
+    bufferMin: 1
+    bufferMax: 3
+    poolMin: 1
+    poolMax: 10
