@@ -1,0 +1,16 @@
+# BatchSandbox - creates sandbox instances from the pool
+apiVersion: sandbox.opensandbox.io/v1alpha1
+kind: BatchSandbox
+metadata:
+  name: test-sandbox
+  namespace: opensandbox
+  labels:
+    app.kubernetes.io/name: opensandbox
+    app.kubernetes.io/component: sandbox
+spec:
+  # Number of sandbox replicas to create
+  replicas: 2
+  # Reference to the pool to allocate from
+  poolRef: simple-pool
+  # Sandbox expiration time (ISO 8601 format)
+  expireTime: "2026-12-31T23:59:59Z"
