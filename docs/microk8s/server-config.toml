@@ -1,0 +1,43 @@
+# OpenSandbox Server Configuration for MicroK8s
+#
+# Usage:
+#   SANDBOX_CONFIG_PATH=docs/microk8s/server-config.toml opensandbox-server
+#
+# Prerequisites:
+#   1. MicroK8s cluster running with registry enabled
+#   2. CRDs installed: make install KUBECTL="microk8s kubectl"
+#   3. Controller deployed: make deploy IMG=... KUBECTL="microk8s kubectl"
+#   4. Pool created: microk8s kubectl apply -f docs/microk8s/pool-full.yaml
+
+[server]
+host = "0.0.0.0"
+port = 8080
+log_level = "INFO"
+# Uncomment to enable API key authentication:
+# api_key = "your-secret-api-key"
+
+[runtime]
+type = "kubernetes"
+# Use local registry image
+execd_image = "localhost:32000/opensandbox-execd:latest"
+
+[storage]
+# Allow all host paths for development (restrict in production)
+allowed_host_paths = []
+
+[kubernetes]
+# MicroK8s kubeconfig location
+# Option 1: Use MicroK8s credentials directly
+kubeconfig_path = "/var/snap/microk8s/current/credentials/client.config"
+
+# Option 2: If you've exported kubeconfig (microk8s config > ~/.kube/config)
+# kubeconfig_path = "~/.kube/config"
+
+# Namespace where sandboxes will be created
+namespace = "opensandbox"
+
+# Workload provider - use batchsandbox for pool-based allocation
+workload_provider = "batchsandbox"
+
+# BatchSandbox template file
+batchsandbox_template_file = "docs/microk8s/batchsandbox-template.yaml"

@@ -1,0 +1,101 @@
+# Lightweight Pool using Python image for testing
+# Use this if you don't want to build the large code-interpreter image
+apiVersion: sandbox.opensandbox.io/v1alpha1
+kind: Pool
+metadata:
+  name: python-pool
+  namespace: opensandbox
+  labels:
+    app.kubernetes.io/name: opensandbox
+    app.kubernetes.io/component: pool
+spec:
+  template:
+    metadata:
+      labels:
+        app: python-sandbox
+        pool: python-pool
+    spec:
+      volumes:
+        - name: sandbox-storage
+          emptyDir: {}
+        - name: opensandbox-bin
+          emptyDir: {}
+
+      initContainers:
+        - name: task-executor-installer
+          image: localhost:32000/opensandbox-task-executor:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              cp /workspace/server /opt/opensandbox/bin/task-executor &&
+              chmod +x /opt/opensandbox/bin/task-executor
+          volumeMounts:
+            - name: opensandbox-bin
+              mountPath: /opt/opensandbox/bin
+
+        - name: execd-installer
+          image: localhost:32000/opensandbox-execd:latest
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              cp ./execd /opt/opensandbox/bin/execd &&
+              cp ./bootstrap.sh /opt/opensandbox/bin/bootstrap.sh &&
+              chmod +x /opt/opensandbox/bin/execd &&
+              chmod +x /opt/opensandbox/bin/bootstrap.sh
+          volumeMounts:
+            - name: opensandbox-bin
+              mountPath: /opt/opensandbox/bin
+
+      containers:
+        - name: sandbox
+          # Using official Python image - lightweight alternative to code-interpreter
+          image: python:3.11-slim
+          command:
+            - "/bin/sh"
+            - "-c"
+            - |
+              # Start task-executor in background
+              /opt/opensandbox/bin/task-executor -listen-addr=0.0.0.0:5758 &
+              # Keep container running
+              tail -f /dev/null
+          ports:
+            - containerPort: 5758
+              name: task-executor
+            - containerPort: 44772
+              name: execd
+          env:
+            - name: SANDBOX_MAIN_CONTAINER
+              value: main
+            - name: EXECD_ENVS
+              value: /opt/opensandbox/.env
+            - name: EXECD
+              value: /opt/opensandbox/bin/execd
+          volumeMounts:
+            - name: sandbox-storage
+              mountPath: /var/lib/sandbox
+            - name: opensandbox-bin
+              mountPath: /opt/opensandbox/bin
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "512Mi"
+              cpu: "250m"
+
+  capacitySpec:
+    bufferMin: 1
+    bufferMax: 2
+    poolMin: 1
+    poolMax: 5
+---
+# BatchSandbox using python-pool
+apiVersion: sandbox.opensandbox.io/v1alpha1
+kind: BatchSandbox
+metadata:
+  name: python-sandbox
+  namespace: opensandbox
+spec:
+  replicas: 1
+  poolRef: python-pool
+  expireTime: "2026-12-31T23:59:59Z"

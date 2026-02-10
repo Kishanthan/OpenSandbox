@@ -1,0 +1,38 @@
+# Simple Pool for testing - uses nginx
+# For production, use pool-full.yaml with code-interpreter image
+apiVersion: sandbox.opensandbox.io/v1alpha1
+kind: Pool
+metadata:
+  name: simple-pool
+  namespace: opensandbox
+  labels:
+    app.kubernetes.io/name: opensandbox
+    app.kubernetes.io/component: pool
+spec:
+  template:
+    metadata:
+      labels:
+        app: sandbox
+        pool: simple-pool
+    spec:
+      containers:
+        - name: sandbox
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+  capacitySpec:
+    # Minimum number of warm pods to keep ready
+    bufferMin: 1
+    # Maximum warm pods
+    bufferMax: 3
+    # Minimum total pods in pool
+    poolMin: 1
+    # Maximum total pods in pool
+    poolMax: 5

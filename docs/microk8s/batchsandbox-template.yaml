@@ -1,0 +1,27 @@
+# BatchSandbox CR template for OpenSandbox Server on MicroK8s
+# This template is used when the server creates sandboxes dynamically
+#
+# The server will merge this template with runtime-generated values
+
+metadata:
+  # Labels and annotations can be added here
+  labels:
+    managed-by: opensandbox-server
+
+spec:
+  replicas: 1
+  template:
+    spec:
+      restartPolicy: Never
+      tolerations:
+        - operator: "Exists"
+      # Resource defaults (can be overridden by API requests)
+      containers:
+        - name: sandbox
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
